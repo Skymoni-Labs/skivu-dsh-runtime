@@ -1,7 +1,7 @@
 // Local inherited-descriptor transport. The host owns all authority.
 import { Socket } from 'node:net';
 
-const requestLimit = 256 * 1024;
+const requestLimit = process.env.SKIVU_LARGE_MODEL_FRAMES === '1' ? 4 * 1024 * 1024 : 256 * 1024;
 const responseLimit = 8 * 1024 * 1024;
 
 export class ModelClient {

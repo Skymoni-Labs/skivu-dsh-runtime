@@ -124,7 +124,7 @@ class RuntimeService : Service() {
                 if(lease.cancelled) return
                 lease.pid=native.start(listener.fd,model.fd,device.fd,pipes[1].fd,
                     File(lib,"libproot.so").absolutePath,File(lib,"libprootloader.so").absolutePath,
-                    root.absolutePath,tmp.absolutePath,home.absolutePath,projects.absolutePath,port.toString(),data.getBoolean("modelCatalog",false))
+                    root.absolutePath,tmp.absolutePath,home.absolutePath,projects.absolutePath,port.toString(),data.getBoolean("modelCatalog",false),data.getBoolean("largeModelFrames",false))
                 check(lease.pid>0)
             }
             pipes[1].close()
@@ -209,7 +209,7 @@ class RuntimeService : Service() {
 class NativeRunner {
     companion object { init { System.loadLibrary("runtime") } }
     external fun start(listener:Int,model:Int,device:Int,output:Int,proot:String,loader:String,
-        root:String,tmp:String,home:String,projects:String,port:String,catalog:Boolean):Int
+        root:String,tmp:String,home:String,projects:String,port:String,catalog:Boolean,largeFrames:Boolean):Int
     external fun stopAll():Boolean
     external fun poll(pid:Int):Int
 }

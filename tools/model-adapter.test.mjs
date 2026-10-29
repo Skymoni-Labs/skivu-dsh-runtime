@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Duplex } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 const base=process.env.SKIVU_ADAPTER_PATH;
+process.env.SKIVU_LARGE_MODEL_FRAMES='1';
 if(!base)throw new Error('Set SKIVU_ADAPTER_PATH to a built adapter directory');
 const {SkivuModelAdapter,provider,model}=await import(pathToFileURL(base+'/index.mjs'));
 const {ModelClient}=await import(pathToFileURL(base+'/client.mjs'));
@@ -45,4 +46,27 @@ test('framed transport supports list and selection while rejecting injected fiel
   assert.equal(requests[0].method,'model.list');assert.equal(requests[1].params.model,'custom:b');
   await assert.rejects(client.generate({messages:[],tools:[],endpoint:'https://untrusted.example'}));
   assert.equal(requests.length,2);client.close();
+});
+
+test('transport accepts long coding history and keeps a finite size bound',async()=>{
+  let sent=0;
+  const stream=new Duplex({read(){},write(chunk,encoding,done){
+    const request=JSON.parse(String(chunk));sent++;
+    assert.ok(Buffer.byteLength(chunk)>256*1024);
+    queueMicrotask(()=>this.push(JSON.stringify({id:request.id,ok:true,result:{choices:[]}})+'\n'));done();
+  }});
+  const client=new ModelClient(stream);
+  await client.generate({messages:Array.from({length:300},()=>({role:'user',content:'history '.repeat(128)})),tools:[]});
+  await assert.rejects(client.generate({messages:[{role:'user',content:'x'.repeat(4*1024*1024)}],tools:[]}));
+  assert.equal(sent,1);client.close();
+});
+
+test('older hosts keep their negotiated small frame budget',async()=>{
+  process.env.SKIVU_LARGE_MODEL_FRAMES='0';
+  const {ModelClient:LegacyClient}=await import(pathToFileURL(base+'/client.mjs').href+'?legacy-frame-budget');
+  process.env.SKIVU_LARGE_MODEL_FRAMES='1';
+  let sent=0;
+  const client=new LegacyClient(new Duplex({read(){},write(chunk,encoding,done){sent++;done();}}));
+  await assert.rejects(client.generate({messages:[{role:'user',content:'x'.repeat(300000)}],tools:[]}));
+  assert.equal(sent,0);client.close();
 });

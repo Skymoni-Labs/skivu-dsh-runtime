@@ -12,7 +12,7 @@
 #include <sys/utsname.h>
 
 JNIEXPORT jint JNICALL Java_org_skivu_dsh_runtime_NativeRunner_start(JNIEnv *env,jobject self,
-    jint listener,jint model,jint device,jint output,jstring jp,jstring jl,jstring jr,jstring jt,jstring jh,jstring jw,jstring jport,jboolean catalog) {
+    jint listener,jint model,jint device,jint output,jstring jp,jstring jl,jstring jr,jstring jt,jstring jh,jstring jw,jstring jport,jboolean catalog,jboolean largeFrames) {
     jstring vals[]={jp,jl,jr,jt,jh,jw,jport}; const char *s[7];
     for(int i=0;i<7;i++)s[i]=(*env)->GetStringUTFChars(env,vals[i],0);
     char *tmpenv,*loaderenv,*homebind,*workbind;
@@ -30,7 +30,7 @@ JNIEXPORT jint JNICALL Java_org_skivu_dsh_runtime_NativeRunner_start(JNIEnv *env
         "/opt/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js","web","--host","127.0.0.1","--port",(char*)s[6],"--no-open",NULL};
     char *environment[]={tmpenv,loaderenv,"PROOT_NO_SECCOMP=1",order,"HOME=/workspace","TMPDIR=/tmp",
         "DSH_HOME=/root/skivu-home","PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin",
-        "SKIVU_MODEL_BROKER_FD=4","SKIVU_DEVICE_BROKER_FD=5",catalog?"SKIVU_MODEL_CATALOG=1":"SKIVU_MODEL_CATALOG=0","ANDROID_ROOT=/system","ANDROID_DATA=/data",NULL};
+        "SKIVU_MODEL_BROKER_FD=4","SKIVU_DEVICE_BROKER_FD=5",catalog?"SKIVU_MODEL_CATALOG=1":"SKIVU_MODEL_CATALOG=0",largeFrames?"SKIVU_LARGE_MODEL_FRAMES=1":"SKIVU_LARGE_MODEL_FRAMES=0","ANDROID_ROOT=/system","ANDROID_DATA=/data",NULL};
     pid_t child=fork();
     if(child==0) {
         if(setpgid(0,0)<0)_exit(124);
