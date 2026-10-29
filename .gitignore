@@ -1,0 +1,13 @@
+.gradle/
+**/build/
+local.properties
+app/runtime-assets/
+app/src/main/jniLibs/
+*.jks
+*.keystore
+tools/build-local-*.sh
+*.log
+.kotlin/
+**/__pycache__/
+tools/build-local-*.py
+*.apk
