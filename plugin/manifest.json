@@ -3,7 +3,7 @@
   "apiVersion": "1.0",
   "id": "org.skivu.dsh",
   "name": "手机 DSH",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "minHostVersion": "0.2.45",
   "author": "Skivu",
   "description": "在手机上运行 DeepSeek Harness：对话、编程、项目文件与经授权的手机操作。",

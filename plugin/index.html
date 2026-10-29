@@ -13,7 +13,7 @@
 const component='org.skivu.dsh.runtime/org.skivu.dsh.runtime.RuntimeService';
 const signer='39b262ea602a2c91dc914a7f7ba2dc86e6640e1ad11ca1f07ff61a076b435523';
 const open=document.querySelector('#open'), install=document.querySelector('#install'), status=document.querySelector('#status');
-async function check(){try{const providers=await Skivu.call('runtime.providers',{});const found=providers.find(p=>p.component===component && p.signerSha256===signer && p.protocol===1);open.disabled=!found;install.hidden=!!found;status.textContent=found?'运行组件已就绪。':'点击下方按钮，在 Skivu 内下载并安装运行组件。';}catch(error){open.disabled=true;status.textContent=error.message||'请先更新 Skivu。';}}
+async function check(){try{const providers=await Skivu.call('runtime.providers',{});const found=providers.find(p=>p.component===component && p.signerSha256===signer && p.protocol===1);open.disabled=!found;install.hidden=false;install.textContent=found?'管理运行组件':'在 App 内安装运行组件';status.textContent=found?'运行组件已就绪。':'点击下方按钮，在 Skivu 内下载并安装运行组件。';}catch(error){open.disabled=true;status.textContent=error.message||'请先更新 Skivu。';}}
 open.onclick=async()=>{open.disabled=true;try{await Skivu.call('runtime.open',{component,signerSha256:signer});status.textContent='本次运行已关闭。';}catch(error){status.textContent=error.message||'启动未完成，请检查组件安装及授权。';}finally{await check();}};
 install.onclick=async()=>{install.disabled=true;try{await Skivu.call('runtime.install',{component,signerSha256:signer});}catch(error){status.textContent=error.message||'安装未完成，请重试。';}finally{install.disabled=false;await check();}};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});await check();
