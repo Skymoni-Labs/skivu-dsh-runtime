@@ -12,7 +12,7 @@
 #include <sys/utsname.h>
 
 JNIEXPORT jint JNICALL Java_org_skivu_dsh_runtime_NativeRunner_start(JNIEnv *env,jobject self,
-    jint listener,jint model,jint device,jint output,jstring jp,jstring jl,jstring jr,jstring jt,jstring jh,jstring jw,jstring jport) {
+    jint listener,jint model,jint device,jint output,jstring jp,jstring jl,jstring jr,jstring jt,jstring jh,jstring jw,jstring jport,jboolean catalog) {
     jstring vals[]={jp,jl,jr,jt,jh,jw,jport}; const char *s[7];
     for(int i=0;i<7;i++)s[i]=(*env)->GetStringUTFChars(env,vals[i],0);
     char *tmpenv,*loaderenv,*homebind,*workbind;
@@ -30,7 +30,7 @@ JNIEXPORT jint JNICALL Java_org_skivu_dsh_runtime_NativeRunner_start(JNIEnv *env
         "/opt/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js","web","--host","127.0.0.1","--port",(char*)s[6],"--no-open",NULL};
     char *environment[]={tmpenv,loaderenv,"PROOT_NO_SECCOMP=1",order,"HOME=/workspace","TMPDIR=/tmp",
         "DSH_HOME=/root/skivu-home","PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin",
-        "SKIVU_MODEL_BROKER_FD=4","SKIVU_DEVICE_BROKER_FD=5","ANDROID_ROOT=/system","ANDROID_DATA=/data",NULL};
+        "SKIVU_MODEL_BROKER_FD=4","SKIVU_DEVICE_BROKER_FD=5",catalog?"SKIVU_MODEL_CATALOG=1":"SKIVU_MODEL_CATALOG=0","ANDROID_ROOT=/system","ANDROID_DATA=/data",NULL};
     pid_t child=fork();
     if(child==0) {
         if(setpgid(0,0)<0)_exit(124);
@@ -44,7 +44,7 @@ JNIEXPORT jint JNICALL Java_org_skivu_dsh_runtime_NativeRunner_start(JNIEnv *env
         int nullfd=open("/dev/null",O_RDONLY); if(nullfd<0||dup2(nullfd,0)<0)_exit(121);
         for(int i=3;i<=5;i++) if(fcntl(i,F_SETFD,0)<0)_exit(121);
         for(int i=6;i<65536;i++)close(i);
-        execve(s[0],argv,environment); _exit(122);
+        execve(s[0],argv,environment); perror("skivu bootstrap execve"); _exit(122);
     }
     for(int i=0;i<7;i++)(*env)->ReleaseStringUTFChars(env,vals[i],s[i]);
     free(tmpenv);free(loaderenv);free(homebind);free(workbind);return child;
@@ -74,5 +74,7 @@ JNIEXPORT jboolean JNICALL Java_org_skivu_dsh_runtime_NativeRunner_stopAll(JNIEn
     return JNI_FALSE;
 }
 JNIEXPORT jint JNICALL Java_org_skivu_dsh_runtime_NativeRunner_poll(JNIEnv *env,jobject self,jint pid) {
-    if(pid<=0)return -1;int status;pid_t r=waitpid(pid,&status,WNOHANG);return r==0?0:r==pid?1:-1;
+    if(pid<=0)return -1;int status;pid_t r=waitpid(pid,&status,WNOHANG);
+    if(r==0)return 0;if(r!=pid)return -1;
+    return WIFEXITED(status)?1+WEXITSTATUS(status):WIFSIGNALED(status)?256+WTERMSIG(status):1;
 }

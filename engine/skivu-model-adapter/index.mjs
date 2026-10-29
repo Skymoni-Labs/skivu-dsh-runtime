@@ -40,17 +40,30 @@ export function serialize(options) {
 }
 
 export class SkivuModelAdapter extends LlmAdapter {
-  constructor(client) { super(); this.client = client; }
-  providerInfo(id) { return { id, name: 'Skivu 当前模型' }; }
-  async listModels(id) { return [{ provider: id, id: model, name: '在 Skivu 中选择的模型', inputModalities: ['text'] }]; }
+  constructor(client, catalogEnabled = false) { super(); this.client = client; this.catalogEnabled = catalogEnabled; this.catalogPromise = null; }
+  providerInfo(id) { return { id, name: 'Skivu 模型' }; }
+  async catalog() {
+    if (!this.catalogEnabled) return [];
+    if (!this.catalogPromise) this.catalogPromise = this.client.models().then(rows => {
+      if (!Array.isArray(rows) || rows.length > 512 || rows.some(r => !r || typeof r.id !== 'string' || r.id.length > 512 || typeof r.name !== 'string' || typeof r.provider !== 'string' || typeof r.supportsTools !== 'boolean')) throw new LlmError('Invalid host model catalog','INVALID_RESPONSE');
+      return rows;
+    }).catch(error => { this.catalogPromise = null; throw error; });
+    return this.catalogPromise;
+  }
+  async listModels(id) {
+    return [{ provider: id, id: model, name: '跟随 Skivu 当前选择', inputModalities: ['text'] },
+      ...(await this.catalog()).map(r => ({provider:id,id:r.id,name:`${r.provider} · ${r.name}${r.supportsTools ? '' : '（暂不支持编程协议）'}`,inputModalities:['text']}))];
+  }
   async resolveModel(id, name) {
-    if (id !== provider || name !== model) throw new LlmError('Select the Skivu model', 'UNKNOWN_MODEL');
-    return { provider: id, id: model, name: '在 Skivu 中选择的模型', inputModalities: ['text'] };
+    if (id !== provider) throw new LlmError('Select a Skivu model', 'UNKNOWN_MODEL');
+    const selected = (await this.listModels(id)).find(r => r.id === name);
+    if (!selected) throw new LlmError('Model is not available in the host catalog', 'UNKNOWN_MODEL');
+    return selected;
   }
   async *stream(options) {
-    if (options.provider !== provider || options.model !== model) throw new LlmError('Select the Skivu model', 'UNKNOWN_MODEL');
+    if (options.provider !== provider || !(await this.listModels(provider)).some(r => r.id === options.model)) throw new LlmError('Select a Skivu model', 'UNKNOWN_MODEL');
     options.signal?.throwIfAborted();
-    const result = await this.client.generate(serialize(options), options.signal);
+    const result = await this.client.generate({...serialize(options),...(options.model===model?{}:{model:options.model})}, options.signal);
     options.signal?.throwIfAborted();
     const choice = result?.choices?.[0];
     const message = choice?.message;
@@ -88,7 +101,7 @@ export function apply(ctx) {
   if (!raw || !/^[0-9]+$/.test(raw)) throw new Error('Skivu model broker was not provided');
   const client = ModelClient.fromFd(Number(raw));
   try {
-    ctx.llm.registerAdapter([provider], new SkivuModelAdapter(client));
+    ctx.llm.registerAdapter([provider], new SkivuModelAdapter(client,process.env.SKIVU_MODEL_CATALOG==='1'));
     ctx.effect(() => () => client.close());
   } catch (error) { client.close(); throw error; }
 }

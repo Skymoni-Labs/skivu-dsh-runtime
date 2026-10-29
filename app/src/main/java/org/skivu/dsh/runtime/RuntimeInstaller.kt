@@ -56,19 +56,37 @@ class RuntimeInstaller(private val context: Context) {
         return out
     }
 
-    @Synchronized fun install(): File {
+    private fun removeStaging(staging:File) {
+        java.nio.file.Files.walkFileTree(staging.toPath(), object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+            override fun visitFile(file:java.nio.file.Path, attrs:java.nio.file.attribute.BasicFileAttributes):java.nio.file.FileVisitResult {
+                java.nio.file.Files.delete(file);return java.nio.file.FileVisitResult.CONTINUE
+            }
+            override fun postVisitDirectory(dir:java.nio.file.Path,error:IOException?):java.nio.file.FileVisitResult {
+                if(error!=null)throw error
+                java.nio.file.Files.delete(dir);return java.nio.file.FileVisitResult.CONTINUE
+            }
+        })
+    }
+    @Synchronized fun install(progress:(Int)->Unit={}): File {
+        android.util.Log.i("SkivuRuntime","archive metadata")
         val metadata = JSONObject(context.assets.open("runtime.json").bufferedReader().use { it.readText() })
         val sha = metadata.getString("sha256"); require(Regex("[0-9a-f]{64}").matches(sha))
         val base = File(context.filesDir,"runtimes").apply { mkdirs() }
+        require(!java.nio.file.Files.isSymbolicLink(base.toPath()) && base.canonicalFile==File(context.filesDir.canonicalFile,"runtimes"))
+        // Abandoned installer-owned staging only; published roots, projects and
+        // home are preserved. walkFileTree never follows symlinks.
+        base.listFiles()?.filter { Regex("stage-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}").matches(it.name) }?.forEach { removeStaging(it) }
         val target = File(base, sha)
         val marker = File(target,".installed")
         if (marker.isFile && marker.readText() == sha) return target
         require(!target.exists())
+        android.util.Log.i("SkivuRuntime","archive verify")
         val digest = MessageDigest.getInstance("SHA-256")
         context.assets.open("runtime.bin").use { input ->
             val buffer=ByteArray(65536); while (true) { val n=input.read(buffer); if(n<0) break; digest.update(buffer,0,n) }
         }
         require(digest.digest().joinToString("") { "%02x".format(it) } == sha)
+        android.util.Log.i("SkivuRuntime","archive extracting")
         val staging=File(base,"stage-"+UUID.randomUUID()).apply { check(mkdir()) }
         try {
             val names=HashSet<String>(); var total=0L; var extended=emptyMap<String,String>()
@@ -92,6 +110,7 @@ class RuntimeInstaller(private val context: Context) {
                     extended=emptyMap()
                     if(name=="./" || name==".") { require(type=='5' && size==0L); continue }
                     val normalized=path(name); require(names.add(normalized) && names.size<=100000)
+                    if(names.size%2000==0) progress(names.size)
                     val dest=File(staging,normalized)
                     dest.parentFile!!.mkdirs(); inside(staging,dest.parentFile!!)
                     when(type) {
@@ -116,18 +135,11 @@ class RuntimeInstaller(private val context: Context) {
             }
             File(staging,".installed").writeText(sha)
             check(staging.renameTo(target))
+            android.util.Log.i("SkivuRuntime","archive ready")
             return target
         } catch (error: Throwable) {
             // Unique staging path was created here and all links were confined.
-            java.nio.file.Files.walkFileTree(staging.toPath(), object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
-                override fun visitFile(file:java.nio.file.Path, attrs:java.nio.file.attribute.BasicFileAttributes):java.nio.file.FileVisitResult {
-                    java.nio.file.Files.delete(file); return java.nio.file.FileVisitResult.CONTINUE
-                }
-                override fun postVisitDirectory(dir:java.nio.file.Path,error:IOException?):java.nio.file.FileVisitResult {
-                    if(error!=null) throw error
-                    java.nio.file.Files.delete(dir); return java.nio.file.FileVisitResult.CONTINUE
-                }
-            })
+            removeStaging(staging)
             throw error
         }
     }

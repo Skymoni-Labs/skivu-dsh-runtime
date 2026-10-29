@@ -43,14 +43,19 @@ export class ModelClient {
     }
   }
   generate(params, signal) {
+    const keys = params && typeof params === 'object' && !Array.isArray(params) ? Object.keys(params).sort().join(',') : '';
+    if (!['messages,tools','messages,model,tools'].includes(keys) || ('model' in params && (typeof params.model !== 'string' || params.model.length > 512))) return Promise.reject(new Error('Invalid model parameters'));
+    return this.request('model.generate',params,signal);
+  }
+  models() { return this.request('model.list',{}); }
+  request(method, params, signal) {
     if (this.closed) return Promise.reject(new Error('Model broker closed'));
     if (signal?.aborted) return Promise.reject(new Error('Model request cancelled'));
     if (this.pending) return Promise.reject(new Error('Model broker busy'));
     if (this.serial >= 4096) return Promise.reject(new Error('Model broker request limit reached'));
-    if (!params || typeof params !== 'object' || Array.isArray(params) || Object.keys(params).sort().join(',') !== 'messages,tools') return Promise.reject(new Error('Invalid model parameters'));
     const id = String(++this.serial);
     let body;
-    try { body = JSON.stringify({ id, method: 'model.generate', params }) + '\n'; } catch { return Promise.reject(new Error('Invalid model parameters')); }
+    try { body = JSON.stringify({ id, method, params }) + '\n'; } catch { return Promise.reject(new Error('Invalid model parameters')); }
     if (Buffer.byteLength(body) > requestLimit) return Promise.reject(new Error('Model request too large'));
     return new Promise((resolve, reject) => {
       const abort = () => this.close('Model request cancelled');

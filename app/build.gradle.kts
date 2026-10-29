@@ -6,8 +6,8 @@ android {
         applicationId = "org.skivu.dsh.runtime"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.3"
         ndk { abiFilters += (providers.gradleProperty("runtimeAbi").orNull ?: "arm64-v8a") }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
@@ -17,5 +17,5 @@ android {
     sourceSets["main"].assets.srcDir("runtime-assets/" + (providers.gradleProperty("runtimeAbi").orNull ?: "arm64-v8a"))
     // Preserve Skivu's established installation signer. No signing material is
     // stored in this repository; release operators verify the certificate.
-    buildTypes { release { isMinifyEnabled = false; signingConfig = signingConfigs.getByName("debug") } }
+    buildTypes { release { isMinifyEnabled = false; isDebuggable = false; signingConfig = signingConfigs.getByName("debug") } }
 }
